@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -7,9 +8,25 @@ namespace ReflectionBinarySerializer
 {
     public static class BinarySerializer
     {
+        private static Dictionary<string, FieldInfo[]> cachedFields = new Dictionary<string, FieldInfo[]>();
+
+        public static void ClearCache()
+        {
+            cachedFields.Clear();
+        }
+
         public static byte[] Serialize<T>(T instance)
         {
-            FieldInfo[] sortedFields = instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).OrderBy(x => x.Name).ToArray();
+            FieldInfo[] sortedFields;
+
+            if (cachedFields.ContainsKey(instance.GetType().FullName))
+                sortedFields = cachedFields[instance.GetType().FullName];
+            else
+            {
+                sortedFields = instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).OrderBy(x => x.Name).ToArray();
+                cachedFields.Add(instance.GetType().FullName, sortedFields);
+            }
+
             int outputSize = 0;
             //Calculate output size
             for (int i = 0; i < sortedFields.Length; i++)
@@ -98,7 +115,17 @@ namespace ReflectionBinarySerializer
         public static T Deserialize<T>(byte[] binary) where T : new()
         {
             T instance = new T();
-            FieldInfo[] sortedFields = instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).OrderBy(x => x.Name).ToArray();
+
+            FieldInfo[] sortedFields;
+        
+            if (cachedFields.ContainsKey(instance.GetType().FullName))
+                sortedFields = cachedFields[instance.GetType().FullName];
+            else
+            {
+                sortedFields = instance.GetType().GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).OrderBy(x => x.Name).ToArray();
+                cachedFields.Add(instance.GetType().FullName, sortedFields);
+            }
+
             using (MemoryStream stream = new MemoryStream(binary))
             {
                 using (BinaryReader reader = new BinaryReader(stream))
